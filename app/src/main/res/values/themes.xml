@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base app theme. Compose handles all visual theming via ObsidianFluxTheme.
+         This shell exists only to set the window background during cold-start
+         so there is no white flash before Compose renders. -->
+    <style name="Theme.SearxDroid" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F8F9FA</item>
+        <item name="android:statusBarColor">#00000000</item>
+        <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

@@ -1,0 +1,130 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # ── Signing keystore ──────────────────────────────────────────────────
+      # First run: generates a fresh keystore and uploads it as an artifact.
+      # After first run: base64-encode that file and save as KEYSTORE_BASE64
+      # secret so all future builds reuse the same key (seamless OTA updates).
+      - name: Resolve or generate signing keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64:   ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > searxdroid.jks
+            STORE_PASS="${KEYSTORE_PASSWORD}"
+            ALIAS="${KEY_ALIAS}"
+            KEY_PASS="${KEY_PASSWORD}"
+            echo "first_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  No KEYSTORE_BASE64 found — generating a one-time keystore."
+            echo "    Download the 'SAVE-AS-KEYSTORE_BASE64-SECRET' artifact, run:"
+            echo "      base64 -w 0 searxdroid.jks"
+            echo "    then save the output as KEYSTORE_BASE64 repo secret."
+            keytool -genkeypair -v \
+              -keystore searxdroid.jks \
+              -alias searxdroid \
+              -keyalg RSA -keysize 2048 -validity 36500 \
+              -storepass searx_debug -keypass searx_debug \
+              -dname "CN=SearxDroid, O=BorgorNinja, C=US" \
+              -noprompt
+            STORE_PASS="searx_debug"
+            ALIAS="searxdroid"
+            KEY_PASS="searx_debug"
+            echo "first_run=true" >> $GITHUB_OUTPUT
+          fi
+          printf 'storeFile=../searxdroid.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$STORE_PASS" "$ALIAS" "$KEY_PASS" > keystore.properties
+
+      - name: Upload keystore for secret setup (first run only)
+        if: steps.keystore.outputs.first_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAVE-AS-KEYSTORE_BASE64-SECRET
+          path: searxdroid.jks
+          retention-days: 30
+
+      # ── Build Debug APK ───────────────────────────────────────────────────
+      - name: Build Debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=0.1.${{ github.run_number }}
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: searxdroid-debug-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+      # ── Build Release APK ─────────────────────────────────────────────────
+      - name: Build Release APK
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=0.1.${{ github.run_number }}
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: searxdroid-release-${{ github.run_number }}
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      # ── GitHub Release (main branch pushes only) ──────────────────────────
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   v0.1.${{ github.run_number }}
+          name:       "SearxDroid v0.1.${{ github.run_number }}"
+          prerelease: true
+          body: |
+            **Commit:** `${{ github.sha }}`
+            **Message:** ${{ github.event.head_commit.message }}
+
+            ### Install
+            Download the APK below and sideload — no Play Store required.
+
+            > ℹ️ Both APKs are signed with the same key. Install either once;
+            > future releases will update over it seamlessly.
+            > On first build, download `SAVE-AS-KEYSTORE_BASE64-SECRET` and
+            > follow the README instructions to lock in your signing key.
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
