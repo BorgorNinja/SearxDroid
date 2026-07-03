@@ -41,6 +41,7 @@ class SearchRepository {
                 val service = SearxApiClient.buildServiceFor(url)
                 val response = service.search(
                     query       = query,
+                    format      = "json",
                     categories  = categories,
                     language    = language,
                     safeSearch  = safeSearch,
