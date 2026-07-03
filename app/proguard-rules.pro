@@ -29,3 +29,7 @@
 
 # Keep data models for serialization
 -keep class dev.searxdroid.app.data.model.** { *; }
+
+# Jsoup HTML parser (used by SearxHtmlParser for HTML-mode fallback)
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**

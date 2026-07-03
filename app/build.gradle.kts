@@ -131,4 +131,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.coil.compose)
+
+    // HTML parsing fallback for instances without JSON API enabled
+    implementation(libs.jsoup)
 }
