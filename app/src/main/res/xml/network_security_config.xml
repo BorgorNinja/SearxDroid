@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Allows cleartext HTTP traffic to localhost (for future embedded server mode)
-    and to any user-configured private/LAN SearXNG instance (192.168.x.x etc).
-    External HTTPS traffic is always encrypted.
+    Cleartext HTTP (non-TLS) rules for user-configured SearXNG instances.
+
+    Private/LAN instances (192.168.x.x, 10.x.x.x, localhost) are common
+    self-hosted scenarios and always allowed in plain HTTP.
+
+    Public IPs (e.g. a home-server with a raw IP and no SSL cert) are also
+    permitted — the user consciously entered an http:// URL, so we honour it
+    rather than silently blocking it and confusing them with a "JSON API
+    disabled" error that actually came from a fallback public instance.
+
+    All built-in fallback instances use HTTPS, so privacy is maintained for
+    the default experience.
 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="true">192.168.0.0</domain>
-        <domain includeSubdomains="true">10.0.0.0</domain>
-    </domain-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
