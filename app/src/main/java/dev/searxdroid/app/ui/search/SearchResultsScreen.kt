@@ -6,6 +6,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -21,6 +26,7 @@ import dev.searxdroid.app.data.model.SearchCategory
 import dev.searxdroid.app.data.model.SearxResult
 import dev.searxdroid.app.data.repository.SearchState
 import dev.searxdroid.app.ui.components.CategoryChip
+import dev.searxdroid.app.ui.components.ImageThumbnailCard
 import dev.searxdroid.app.ui.components.ResultCard
 import dev.searxdroid.app.ui.components.SearxSearchBar
 
@@ -35,6 +41,7 @@ fun SearchResultsScreen(
     val query       by viewModel.query.collectAsState()
     val category    by viewModel.category.collectAsState()
     val listState   = rememberLazyListState()
+    val gridState   = rememberLazyGridState()
 
     // Trigger search when landing on this screen
     LaunchedEffect(initialQuery) {
@@ -100,52 +107,97 @@ fun SearchResultsScreen(
                 modifier = Modifier.padding(padding),
             )
             is SearchState.Success -> {
-                LazyColumn(
-                    state          = listState,
-                    modifier       = Modifier.padding(padding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // Stats bar
-                    item {
-                        ResultStats(
-                            count       = state.response.numberOfResults,
-                            instanceUrl = state.instanceUrl,
-                        )
-                    }
-
-                    // Answer box (if SearXNG returned a direct answer)
-                    if (state.response.answers.isNotEmpty()) {
-                        item {
-                            AnswerBox(answer = state.response.answers.first())
+                if (category == SearchCategory.IMAGES) {
+                    // ── 2-column image grid ───────────────────────────────────
+                    LazyVerticalGrid(
+                        columns               = GridCells.Fixed(2),
+                        state                 = gridState,
+                        modifier              = Modifier.padding(padding),
+                        contentPadding        = PaddingValues(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement   = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            ResultStats(
+                                count       = state.response.numberOfResults,
+                                instanceUrl = state.instanceUrl,
+                            )
                         }
-                    }
-
-                    // Result cards
-                    items(state.response.results, key = { it.url }) { result ->
-                        ResultCard(result = result)
-                    }
-
-                    // Load more button
-                    if (state.response.results.isNotEmpty()) {
-                        item {
-                            TextButton(
-                                onClick  = viewModel::loadNextPage,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                            ) {
-                                Text("Load more results",
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    fontWeight = FontWeight.Medium)
+                        if (state.response.answers.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                AnswerBox(answer = state.response.answers.first())
+                            }
+                        }
+                        items(state.response.results, key = { it.url }) { result ->
+                            ImageThumbnailCard(result = result)
+                        }
+                        if (state.response.results.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                TextButton(
+                                    onClick  = viewModel::loadNextPage,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                ) {
+                                    Text("Load more results",
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                        if (state.response.suggestions.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SuggestionsBar(
+                                    suggestions = state.response.suggestions,
+                                    onSuggestion = { viewModel.search(it) },
+                                )
                             }
                         }
                     }
-
-                    // Suggestions
-                    if (state.response.suggestions.isNotEmpty()) {
-                        item { SuggestionsBar(suggestions = state.response.suggestions,
-                            onSuggestion = { viewModel.search(it) }) }
+                } else {
+                    // ── Standard list (general / videos / news / etc.) ────────
+                    LazyColumn(
+                        state          = listState,
+                        modifier       = Modifier.padding(padding),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item {
+                            ResultStats(
+                                count       = state.response.numberOfResults,
+                                instanceUrl = state.instanceUrl,
+                            )
+                        }
+                        if (state.response.answers.isNotEmpty()) {
+                            item {
+                                AnswerBox(answer = state.response.answers.first())
+                            }
+                        }
+                        items(state.response.results, key = { it.url }) { result ->
+                            ResultCard(result = result)
+                        }
+                        if (state.response.results.isNotEmpty()) {
+                            item {
+                                TextButton(
+                                    onClick  = viewModel::loadNextPage,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                ) {
+                                    Text("Load more results",
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                        if (state.response.suggestions.isNotEmpty()) {
+                            item {
+                                SuggestionsBar(
+                                    suggestions  = state.response.suggestions,
+                                    onSuggestion = { viewModel.search(it) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -195,7 +247,6 @@ private fun ResultStats(count: Long, instanceUrl: String) {
         val countText = if (count > 0) "~${formatCount(count)} results" else "Results"
         Text(countText, style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // Instance badge
         Surface(
             shape = MaterialTheme.shapes.extraSmall,
             color = MaterialTheme.colorScheme.surfaceContainerLow,

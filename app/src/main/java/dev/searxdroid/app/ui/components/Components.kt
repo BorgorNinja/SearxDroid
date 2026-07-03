@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -108,95 +109,232 @@ fun SearxSearchBar(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  ResultCard
+//  ResultCard  (general + video)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var hovered by remember { mutableStateOf(false) }
-    val borderColor by animateColorAsState(
-        targetValue = if (hovered) MaterialTheme.colorScheme.secondary
-                      else MaterialTheme.colorScheme.outlineVariant,
-        label = "border",
-    )
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.url))
-                context.startActivity(intent)
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.url)))
             },
         shape  = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
-        border = CardDefaults.outlinedCardBorder().copy(
-            width = 1.dp,
-            // We can't easily animate card border here, so use static outline
-        ),
+        border = CardDefaults.outlinedCardBorder().copy(width = 1.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column {
+            // Video thumbnail — shown only for video template results
+            if (result.template == "videos.html") {
+                VideoThumbnail(result = result)
+            }
 
-            // Domain + favicon row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 4.dp),
-            ) {
-                FaviconImage(domain = result.displayDomain)
+            // Text content
+            Column(modifier = Modifier.padding(16.dp)) {
+
+                // Domain + favicon row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 4.dp),
+                ) {
+                    FaviconImage(domain = result.displayDomain)
+                    Text(
+                        text  = result.displayDomain,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow  = TextOverflow.Ellipsis,
+                    )
+                }
+
+                // Title
                 Text(
-                    text  = result.displayDomain,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
+                    text  = result.title,
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 17.sp),
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
                     overflow  = TextOverflow.Ellipsis,
                 )
-            }
 
-            // Title
-            Text(
-                text  = result.title,
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 17.sp),
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow  = TextOverflow.Ellipsis,
-            )
-
-            // Snippet
-            if (result.content.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text     = result.content,
-                    style    = MaterialTheme.typography.bodyMedium,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            // Source chips
-            Spacer(Modifier.height(10.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment     = Alignment.CenterVertically,
-            ) {
-                if (result.engine.isNotBlank()) {
-                    PrivacyChip(icon = Icons.Outlined.Source, label = result.engine.replaceFirstChar { it.titlecase() })
+                // Snippet
+                if (result.content.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text     = result.content,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                if (result.category.isNotBlank() && result.category != "general") {
-                    PrivacyChip(icon = Icons.Outlined.Category, label = result.category.replaceFirstChar { it.titlecase() })
-                }
-                if (result.publishedDate != null) {
-                    PrivacyChip(icon = Icons.Outlined.Schedule, label = result.publishedDate.take(10))
+
+                // Source chips
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    if (result.engine.isNotBlank()) {
+                        PrivacyChip(icon = Icons.Outlined.Source, label = result.engine.replaceFirstChar { it.titlecase() })
+                    }
+                    if (result.category.isNotBlank() && result.category != "general") {
+                        PrivacyChip(icon = Icons.Outlined.Category, label = result.category.replaceFirstChar { it.titlecase() })
+                    }
+                    if (result.publishedDate != null) {
+                        PrivacyChip(icon = Icons.Outlined.Schedule, label = result.publishedDate.take(10))
+                    }
                 }
             }
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VideoThumbnail  (private — used inside ResultCard)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun VideoThumbnail(result: SearxResult) {
+    val context = LocalContext.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)),
+    ) {
+        if (result.thumbnailSrc != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(result.thumbnailSrc)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier     = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            // Fallback dark placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.PlayArrow,
+                    contentDescription = null,
+                    tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp),
+                )
+            }
+        }
+
+        // Play button overlay (always shown)
+        Icon(
+            imageVector        = Icons.Outlined.PlayCircle,
+            contentDescription = "Play video",
+            modifier           = Modifier.size(52.dp).align(Alignment.Center),
+            tint               = Color.White.copy(alpha = 0.88f),
+        )
+
+        // Duration badge (bottom-right corner)
+        result.length?.let { dur ->
+            Surface(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                shape    = RoundedCornerShape(4.dp),
+                color    = Color.Black.copy(alpha = 0.72f),
+            ) {
+                Text(
+                    text     = dur,
+                    style    = MaterialTheme.typography.labelSmall,
+                    color    = Color.White,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ImageThumbnailCard  (square grid tile for Images search)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun ImageThumbnailCard(result: SearxResult, modifier: Modifier = Modifier) {
+    val context  = LocalContext.current
+    val imageUrl = result.thumbnailSrc ?: result.imgSrc
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clickable {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.url)))
+            },
+        shape  = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = result.title,
+                    modifier     = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                // Placeholder when no image URL is available
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.Image,
+                        contentDescription = null,
+                        tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+
+            // Title overlay at the bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text     = result.title,
+                    style    = MaterialTheme.typography.labelSmall,
+                    color    = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FaviconImage
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun FaviconImage(domain: String) {
@@ -233,11 +371,11 @@ fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit, modifier
                    else MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
-            text     = label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            style    = MaterialTheme.typography.labelSmall,
-            color    = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                       else MaterialTheme.colorScheme.onSurfaceVariant,
+            text       = label,
+            modifier   = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            style      = MaterialTheme.typography.labelSmall,
+            color      = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                         else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
