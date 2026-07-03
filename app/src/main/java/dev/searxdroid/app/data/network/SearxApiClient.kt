@@ -7,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -41,6 +42,15 @@ object SearxApiClient {
                     .header("Accept-Language", "en-US,en;q=0.5")
                     .build()
                 chain.proceed(req)
+            }
+            .addInterceptor { chain ->
+                val resp = chain.proceed(chain.request())
+                val ct = resp.header("Content-Type") ?: ""
+                if ("html" in ct || ("json" !in ct && resp.isSuccessful && ct.isNotEmpty())) {
+                    resp.close()
+                    throw IOException("Instance has JSON API disabled. Open ⚙ Settings to switch instance.")
+                }
+                resp
             }
             .addInterceptor(
                 HttpLoggingInterceptor().apply {

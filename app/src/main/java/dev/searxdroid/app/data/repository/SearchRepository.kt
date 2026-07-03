@@ -54,7 +54,7 @@ class SearchRepository {
                 // Empty but no error — try next instance
                 lastError = "No results from $url"
             } catch (e: Exception) {
-                lastError = e.localizedMessage ?: "Unknown error from $url"
+                lastError = (e.localizedMessage ?: "Unknown error").lines().first().take(120)
             }
         }
 
