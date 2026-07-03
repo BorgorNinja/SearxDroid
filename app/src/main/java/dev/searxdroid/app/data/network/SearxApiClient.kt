@@ -3,15 +3,14 @@ package dev.searxdroid.app.data.network
 import android.content.Context
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import okhttp3.Cookie
 import okhttp3.CookieJar
-import okhttp3.JavaNetCookieJar
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.io.IOException
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.util.concurrent.TimeUnit
 
 /**
@@ -31,13 +30,23 @@ object SearxApiClient {
     }
 
     /**
-     * Persistent cookie jar so session tokens from SearXNG's bot-protection
-     * limiter (if enabled on the instance) survive across requests.  Without
-     * this every search hits the instance "cold" with no session cookie and
-     * triggers an HTML challenge page instead of a JSON response.
+     * Simple in-memory CookieJar keyed by host.
+     *
+     * Persists SearXNG session tokens across requests so bot-protection
+     * limiter challenges are passed on the first response and subsequent
+     * searches go through cleanly — without needing the external
+     * okhttp-urlconnection artifact.
      */
-    private val cookieJar: CookieJar by lazy {
-        JavaNetCookieJar(CookieManager().also { it.setCookiePolicy(CookiePolicy.ACCEPT_ALL) })
+    private val cookieJar: CookieJar = object : CookieJar {
+        private val store = mutableMapOf<String, List<Cookie>>()
+
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            store[url.host] = cookies
+        }
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            return store[url.host] ?: emptyList()
+        }
     }
 
     private val okHttpClient: OkHttpClient by lazy {
