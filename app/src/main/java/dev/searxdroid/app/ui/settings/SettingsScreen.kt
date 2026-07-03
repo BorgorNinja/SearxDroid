@@ -3,7 +3,6 @@ package dev.searxdroid.app.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -144,8 +143,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroup {
                     // Built-in public instances
-                    items(DEFAULT_SEARX_INSTANCES.size) { i ->
-                        val inst = DEFAULT_SEARX_INSTANCES[i]
+                    DEFAULT_SEARX_INSTANCES.forEachIndexed { i, inst ->
                         InstanceRow(
                             instance = inst,
                             isActive = inst.url == instanceUrl,
