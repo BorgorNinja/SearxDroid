@@ -267,10 +267,8 @@ fun PrivacyChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: St
     }
 }
 
-// Needed for AnimatedVisibility import
-@Suppress("NOTHING_TO_INLINE")
 @Composable
-private inline fun AnimatedVisibility(
+private fun AnimatedVisibility(
     visible: Boolean,
     content: @Composable () -> Unit,
 ) {
