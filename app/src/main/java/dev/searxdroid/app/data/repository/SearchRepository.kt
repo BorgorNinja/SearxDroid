@@ -21,24 +21,29 @@ sealed class SearchState {
 class SearchRepository {
 
     private val json = Json {
-        ignoreUnknownKeys  = true
-        isLenient          = true
-        coerceInputValues  = true
+        ignoreUnknownKeys = true
+        isLenient         = true
+        coerceInputValues = true
     }
 
     /**
      * Execute a search against the given SearXNG instance.
      *
-     * ## Parsing strategy (per candidate URL)
+     * ## Per-candidate strategy
      *
-     * 1. Request `?format=json`.
-     *    - If the response Content-Type is `application/json` → parse as JSON.
-     *    - If the response is HTML (JSON API disabled on the instance) →
-     *      make a **second** request *without* a format parameter so SearXNG
-     *      returns its full HTML search-results page, then parse with
-     *      [SearxHtmlParser] (Jsoup).
-     * 2. Falls back through [fallbackInstances] if the primary URL fails
-     *    entirely (network error, HTTP error, no results).
+     * 1. **Session warmup** — GET / to set cookies for bot-protection bypass.
+     *    SearXNG's limiter checks for a `client_token` cookie that is only set
+     *    after a real browser visits the homepage. Without it, cold requests
+     *    receive an HTML challenge page instead of results.
+     *
+     * 2. **Try JSON** — request `?format=json`. If Content-Type is
+     *    `application/json`, parse with kotlinx.serialization.
+     *
+     * 3. **HTML fallback** — if the instance has JSON disabled (Content-Type
+     *    is `text/html`), re-request without a format parameter so SearXNG
+     *    returns its full HTML results page, then parse with [SearxHtmlParser].
+     *    Selectors are derived directly from SearXNG's simple-theme templates
+     *    (macros.html, result_templates/images.html, result_templates/videos.html).
      */
     suspend fun search(
         query: String,
@@ -55,6 +60,11 @@ class SearchRepository {
 
         for (url in candidates) {
             try {
+                // ── 0. Warm session ───────────────────────────────────────────
+                // GET / to establish cookies before the first search request.
+                // Cached per base URL so subsequent searches don't re-warm.
+                SearxApiClient.warmupSession(url)
+
                 val service = SearxApiClient.buildServiceFor(url)
 
                 // ── 1. Try JSON ───────────────────────────────────────────────
@@ -79,13 +89,13 @@ class SearchRepository {
                     continue
                 }
 
-                // ── 2. JSON unavailable — fall back to HTML parsing ───────────
-                // The JSON request returned HTML (instance has JSON disabled).
-                // We must make a fresh request *without* format=json so SearXNG
-                // renders its full search-results HTML rather than an error page.
+                // ── 2. HTML fallback ─────────────────────────────────────────
+                // JSON is disabled on this instance (or the response was a
+                // challenge page). Request without format= so SearXNG returns
+                // its standard HTML search-results page.
                 val htmlResp = service.search(
                     query      = query,
-                    format     = null,   // null → Retrofit omits the parameter
+                    format     = null,   // omitted → SearXNG returns HTML
                     categories = categories,
                     language   = language,
                     safeSearch = safeSearch,

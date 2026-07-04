@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.searxdroid.app.data.model.SearchCategory
-import dev.searxdroid.app.data.model.DEFAULT_SEARX_INSTANCES
 import dev.searxdroid.app.data.repository.SearchRepository
 import dev.searxdroid.app.data.repository.SearchState
 import dev.searxdroid.app.data.repository.SettingsRepository
@@ -40,20 +39,26 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
 
     fun search(q: String = _query.value, cat: SearchCategory = _category.value, page: Int = 1) {
         if (q.isBlank()) return
-        _query.value    = q
-        _category.value = cat
+        _query.value       = q
+        _category.value    = cat
         _currentPage.value = page
         _searchState.value = SearchState.Loading
 
         viewModelScope.launch {
             val instanceUrl = settingsRepo.instanceUrl.first()
-            val safeSearch  = settingsRepo.safeSearch.first()
-            val language    = settingsRepo.language.first()
-            // Fallbacks: cycle through known public instances
-            val fallbacks   = DEFAULT_SEARX_INSTANCES
-                .map { it.url }
-                .filter { it != instanceUrl }
-                .take(3)
+
+            // Guard: no instance configured yet
+            if (instanceUrl.isBlank()) {
+                _searchState.value = SearchState.Error(
+                    message   = "No instance configured. " +
+                                "Add a SearXNG instance URL in ⚙ Settings to get started.",
+                    retryable = false,
+                )
+                return@launch
+            }
+
+            val safeSearch = settingsRepo.safeSearch.first()
+            val language   = settingsRepo.language.first()
 
             _searchState.value = searchRepo.search(
                 query             = q,
@@ -62,14 +67,13 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
                 language          = language,
                 safeSearch        = safeSearch,
                 page              = page,
-                fallbackInstances = fallbacks,
+                fallbackInstances = emptyList(),   // user manages their own instances
             )
         }
     }
 
     fun loadNextPage() {
-        val state = _searchState.value
-        if (state is SearchState.Success) {
+        if (_searchState.value is SearchState.Success) {
             search(page = _currentPage.value + 1)
         }
     }

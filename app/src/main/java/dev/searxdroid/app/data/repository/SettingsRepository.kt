@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import dev.searxdroid.app.data.model.DEFAULT_SEARX_INSTANCES
 import dev.searxdroid.app.data.model.SearxInstance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,23 +17,20 @@ private val Context.dataStore by preferencesDataStore("searxdroid_prefs")
 
 class SettingsRepository private constructor(private val context: Context) {
 
-    private val ds = context.dataStore
+    private val ds   = context.dataStore
     private val json = Json { ignoreUnknownKeys = true }
 
-    // ── Keys ─────────────────────────────────────────────────────────────────
     private object Keys {
-        val INSTANCE_URL    = stringPreferencesKey("instance_url")
-        val DARK_MODE       = booleanPreferencesKey("dark_mode")
-        val SAFE_SEARCH     = intPreferencesKey("safe_search")      // 0/1/2
-        val LANGUAGE        = stringPreferencesKey("language")
-        val CUSTOM_INSTANCES= stringSetPreferencesKey("custom_instances")
-        val ACTIVE_ENGINES  = stringSetPreferencesKey("active_engines")
+        val INSTANCE_URL     = stringPreferencesKey("instance_url")
+        val DARK_MODE        = booleanPreferencesKey("dark_mode")
+        val SAFE_SEARCH      = intPreferencesKey("safe_search")
+        val LANGUAGE         = stringPreferencesKey("language")
+        val CUSTOM_INSTANCES = stringSetPreferencesKey("custom_instances")
+        val ACTIVE_ENGINES   = stringSetPreferencesKey("active_engines")
     }
 
-    // ── Flows ─────────────────────────────────────────────────────────────────
-    val instanceUrl: Flow<String> = ds.data.map { prefs ->
-        prefs[Keys.INSTANCE_URL] ?: DEFAULT_SEARX_INSTANCES.first().url
-    }
+    /** Empty string means no instance has been configured yet. */
+    val instanceUrl: Flow<String> = ds.data.map { it[Keys.INSTANCE_URL] ?: "" }
 
     val darkMode: Flow<Boolean> = ds.data.map { it[Keys.DARK_MODE] ?: false }
 
@@ -52,22 +48,15 @@ class SettingsRepository private constructor(private val context: Context) {
         prefs[Keys.ACTIVE_ENGINES] ?: setOf("google", "bing", "duckduckgo", "brave", "wikipedia")
     }
 
-    // ── Setters ───────────────────────────────────────────────────────────────
-    suspend fun setInstanceUrl(url: String) {
-        ds.edit { it[Keys.INSTANCE_URL] = url }
-    }
+    suspend fun setInstanceUrl(url: String) { ds.edit { it[Keys.INSTANCE_URL] = url } }
 
-    suspend fun setDarkMode(enabled: Boolean) {
-        ds.edit { it[Keys.DARK_MODE] = enabled }
-    }
+    suspend fun setDarkMode(enabled: Boolean) { ds.edit { it[Keys.DARK_MODE] = enabled } }
 
     suspend fun setSafeSearch(level: Int) {
         ds.edit { it[Keys.SAFE_SEARCH] = level.coerceIn(0, 2) }
     }
 
-    suspend fun setLanguage(lang: String) {
-        ds.edit { it[Keys.LANGUAGE] = lang }
-    }
+    suspend fun setLanguage(lang: String) { ds.edit { it[Keys.LANGUAGE] = lang } }
 
     suspend fun addCustomInstance(instance: SearxInstance) {
         ds.edit { prefs ->
