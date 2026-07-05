@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Scale
 import dev.searxdroid.app.data.model.SearxResult
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +102,8 @@ fun SearxSearchBar(
             AnimatedVisibility(visible = query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(Icons.Outlined.Close, contentDescription = "Clear",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -129,15 +131,10 @@ fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
         border = CardDefaults.outlinedCardBorder().copy(width = 1.dp),
     ) {
         Column {
-            // Video thumbnail — shown only for video template results
             if (result.template == "videos.html") {
                 VideoThumbnail(result = result)
             }
-
-            // Text content
             Column(modifier = Modifier.padding(16.dp)) {
-
-                // Domain + favicon row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -153,8 +150,6 @@ fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
                         overflow  = TextOverflow.Ellipsis,
                     )
                 }
-
-                // Title
                 Text(
                     text  = result.title,
                     style = MaterialTheme.typography.headlineMedium.copy(fontSize = 17.sp),
@@ -163,8 +158,6 @@ fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
                     maxLines = 2,
                     overflow  = TextOverflow.Ellipsis,
                 )
-
-                // Snippet
                 if (result.content.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -175,21 +168,22 @@ fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-
-                // Source chips
                 Spacer(Modifier.height(10.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment     = Alignment.CenterVertically,
                 ) {
                     if (result.engine.isNotBlank()) {
-                        PrivacyChip(icon = Icons.Outlined.Source, label = result.engine.replaceFirstChar { it.titlecase() })
+                        PrivacyChip(icon = Icons.Outlined.Source,
+                            label = result.engine.replaceFirstChar { it.titlecase() })
                     }
                     if (result.category.isNotBlank() && result.category != "general") {
-                        PrivacyChip(icon = Icons.Outlined.Category, label = result.category.replaceFirstChar { it.titlecase() })
+                        PrivacyChip(icon = Icons.Outlined.Category,
+                            label = result.category.replaceFirstChar { it.titlecase() })
                     }
                     if (result.publishedDate != null) {
-                        PrivacyChip(icon = Icons.Outlined.Schedule, label = result.publishedDate.take(10))
+                        PrivacyChip(icon = Icons.Outlined.Schedule,
+                            label = result.publishedDate.take(10))
                     }
                 }
             }
@@ -198,7 +192,7 @@ fun ResultCard(result: SearxResult, modifier: Modifier = Modifier) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  VideoThumbnail  (private — used inside ResultCard)
+//  VideoThumbnail
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -211,60 +205,54 @@ private fun VideoThumbnail(result: SearxResult) {
             .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)),
     ) {
         if (result.thumbnailSrc != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
+            // Bound video thumbnails: 640x360 is more than enough for a card preview
+            val req = remember(result.thumbnailSrc) {
+                ImageRequest.Builder(context)
                     .data(result.thumbnailSrc)
+                    .size(640, 360)
+                    .scale(Scale.FILL)
                     .crossfade(true)
-                    .build(),
+                    .build()
+            }
+            AsyncImage(
+                model = req,
                 contentDescription = null,
                 modifier     = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
         } else {
-            // Fallback dark placeholder
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Outlined.PlayArrow,
-                    contentDescription = null,
-                    tint     = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(48.dp),
-                )
+                Icon(Icons.Outlined.PlayArrow, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp))
             }
         }
-
-        // Play button overlay (always shown)
         Icon(
             imageVector        = Icons.Outlined.PlayCircle,
             contentDescription = "Play video",
             modifier           = Modifier.size(52.dp).align(Alignment.Center),
             tint               = Color.White.copy(alpha = 0.88f),
         )
-
-        // Duration badge (bottom-right corner)
         result.length?.let { dur ->
             Surface(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
                 shape    = RoundedCornerShape(4.dp),
                 color    = Color.Black.copy(alpha = 0.72f),
             ) {
-                Text(
-                    text     = dur,
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = Color.White,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                Text(dur, style = MaterialTheme.typography.labelSmall, color = Color.White,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  ImageThumbnailCard  (square grid tile for Images search)
+//  ImageThumbnailCard
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -277,7 +265,8 @@ fun ImageThumbnailCard(result: SearxResult, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .aspectRatio(1f)
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.url)))
+                val target = result.url.ifBlank { result.imgSrc ?: return@clickable }
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
             },
         shape  = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
@@ -286,33 +275,35 @@ fun ImageThumbnailCard(result: SearxResult, modifier: Modifier = Modifier) {
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (imageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
+                // Bound thumbnail to 512×512 px — prevents full-resolution bitmaps
+                // (which can be 4–8 MB each) from being loaded into small grid tiles.
+                // remember(imageUrl) avoids recreating the request on every recomposition.
+                val req = remember(imageUrl) {
+                    ImageRequest.Builder(context)
                         .data(imageUrl)
+                        .size(512, 512)
+                        .scale(Scale.FILL)
                         .crossfade(true)
-                        .build(),
+                        .build()
+                }
+                AsyncImage(
+                    model              = req,
                     contentDescription = result.title,
-                    modifier     = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
+                    modifier           = Modifier.fillMaxSize(),
+                    contentScale       = ContentScale.Crop,
                 )
             } else {
-                // Placeholder when no image URL is available
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        Icons.Outlined.Image,
-                        contentDescription = null,
-                        tint     = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(32.dp),
-                    )
+                    Icon(Icons.Outlined.Image, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp))
                 }
             }
-
-            // Title overlay at the bottom
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -339,6 +330,10 @@ fun ImageThumbnailCard(result: SearxResult, modifier: Modifier = Modifier) {
 @Composable
 private fun FaviconImage(domain: String) {
     val faviconUrl = "https://www.google.com/s2/favicons?domain=$domain&sz=32"
+    val context    = LocalContext.current
+    val req        = remember(domain) {
+        ImageRequest.Builder(context).data(faviconUrl).size(32, 32).crossfade(true).build()
+    }
     Box(
         modifier = Modifier
             .size(16.dp)
@@ -346,19 +341,12 @@ private fun FaviconImage(domain: String) {
             .background(MaterialTheme.colorScheme.surfaceContainer),
         contentAlignment = Alignment.Center,
     ) {
-        AsyncImage(
-            model   = ImageRequest.Builder(LocalContext.current)
-                .data(faviconUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
+        AsyncImage(model = req, contentDescription = null, modifier = Modifier.fillMaxSize())
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  CategoryChip
+//  CategoryChip / PrivacyChip / helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -381,23 +369,15 @@ fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit, modifier
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  PrivacyChip
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun PrivacyChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
-    Surface(
-        shape = RoundedCornerShape(2.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    Surface(shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment     = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null,
-                modifier = Modifier.size(11.dp),
+            Icon(icon, contentDescription = null, modifier = Modifier.size(11.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -406,9 +386,6 @@ fun PrivacyChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: St
 }
 
 @Composable
-private fun AnimatedVisibility(
-    visible: Boolean,
-    content: @Composable () -> Unit,
-) {
+private fun AnimatedVisibility(visible: Boolean, content: @Composable () -> Unit) {
     androidx.compose.animation.AnimatedVisibility(visible = visible) { content() }
 }

@@ -4,13 +4,14 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -18,12 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.searxdroid.app.data.model.SearchCategory
-import dev.searxdroid.app.data.model.SearxResult
 import dev.searxdroid.app.data.repository.SearchState
 import dev.searxdroid.app.ui.components.CategoryChip
 import dev.searxdroid.app.ui.components.ImageThumbnailCard
@@ -43,11 +41,8 @@ fun SearchResultsScreen(
     val listState   = rememberLazyListState()
     val gridState   = rememberLazyGridState()
 
-    // Trigger search when landing on this screen
     LaunchedEffect(initialQuery) {
-        if (query.isBlank() || query != initialQuery) {
-            viewModel.search(initialQuery)
-        }
+        if (query.isBlank() || query != initialQuery) viewModel.search(initialQuery)
     }
 
     Scaffold(
@@ -56,7 +51,7 @@ fun SearchResultsScreen(
                 TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
                         }
                     },
                     title = {
@@ -70,15 +65,13 @@ fun SearchResultsScreen(
                     },
                     actions = {
                         IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "Settings",
+                            Icon(Icons.Outlined.Settings, "Settings",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    ),
+                        containerColor = MaterialTheme.colorScheme.background),
                 )
-                // Category horizontal scroll
                 LazyRow(
                     modifier              = Modifier.fillMaxWidth(),
                     contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -101,11 +94,8 @@ fun SearchResultsScreen(
         when (val state = searchState) {
             is SearchState.Idle    -> Unit
             is SearchState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is SearchState.Error   -> ErrorView(
-                message = state.message,
-                onRetry = viewModel::retry,
-                modifier = Modifier.padding(padding),
-            )
+            is SearchState.Error   -> ErrorView(state.message, viewModel::retry,
+                Modifier.padding(padding))
             is SearchState.Success -> {
                 if (category == SearchCategory.IMAGES) {
                     // ── 2-column image grid ───────────────────────────────────
@@ -118,84 +108,58 @@ fun SearchResultsScreen(
                         verticalArrangement   = Arrangement.spacedBy(8.dp),
                     ) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
-                            ResultStats(
-                                count       = state.response.numberOfResults,
-                                instanceUrl = state.instanceUrl,
-                            )
+                            ResultStats(state.response.numberOfResults, state.instanceUrl)
                         }
                         if (state.response.answers.isNotEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                AnswerBox(answer = state.response.answers.first())
+                                AnswerBox(state.response.answers.first())
                             }
                         }
-                        items(state.response.results, key = { it.url }) { result ->
+                        // Key uses index + url to guarantee uniqueness even when
+                        // multiple engines return the same image URL (duplicate-key
+                        // crash fix: Compose throws IllegalArgumentException on dupe keys)
+                        itemsIndexed(
+                            items = state.response.results,
+                            key   = { index, item -> "${index}_${item.url}" },
+                        ) { _, result ->
                             ImageThumbnailCard(result = result)
                         }
                         if (state.response.results.isNotEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                TextButton(
-                                    onClick  = viewModel::loadNextPage,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                ) {
-                                    Text("Load more results",
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        fontWeight = FontWeight.Medium)
-                                }
+                                LoadMoreButton(onClick = viewModel::loadNextPage)
                             }
                         }
                         if (state.response.suggestions.isNotEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                SuggestionsBar(
-                                    suggestions = state.response.suggestions,
-                                    onSuggestion = { viewModel.search(it) },
-                                )
+                                SuggestionsBar(state.response.suggestions) { viewModel.search(it) }
                             }
                         }
                     }
                 } else {
-                    // ── Standard list (general / videos / news / etc.) ────────
+                    // ── Standard list ─────────────────────────────────────────
                     LazyColumn(
-                        state          = listState,
-                        modifier       = Modifier.padding(padding),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        state               = listState,
+                        modifier            = Modifier.padding(padding),
+                        contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        item {
-                            ResultStats(
-                                count       = state.response.numberOfResults,
-                                instanceUrl = state.instanceUrl,
-                            )
-                        }
+                        item { ResultStats(state.response.numberOfResults, state.instanceUrl) }
                         if (state.response.answers.isNotEmpty()) {
-                            item {
-                                AnswerBox(answer = state.response.answers.first())
-                            }
+                            item { AnswerBox(state.response.answers.first()) }
                         }
-                        items(state.response.results, key = { it.url }) { result ->
+                        // Same index+url composite key here for safety
+                        itemsIndexed(
+                            items = state.response.results,
+                            key   = { index, item -> "${index}_${item.url}" },
+                        ) { _, result ->
                             ResultCard(result = result)
                         }
                         if (state.response.results.isNotEmpty()) {
-                            item {
-                                TextButton(
-                                    onClick  = viewModel::loadNextPage,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                ) {
-                                    Text("Load more results",
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        fontWeight = FontWeight.Medium)
-                                }
-                            }
+                            item { LoadMoreButton(onClick = viewModel::loadNextPage) }
                         }
                         if (state.response.suggestions.isNotEmpty()) {
                             item {
-                                SuggestionsBar(
-                                    suggestions  = state.response.suggestions,
-                                    onSuggestion = { viewModel.search(it) },
-                                )
+                                SuggestionsBar(state.response.suggestions) { viewModel.search(it) }
                             }
                         }
                     }
@@ -205,10 +169,13 @@ fun SearchResultsScreen(
     }
 }
 
+// ─── Private composables ──────────────────────────────────────────────────────
+
 @Composable
 private fun LoadingIndicator(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
             Text("Searching privately...", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -218,19 +185,17 @@ private fun LoadingIndicator(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Outlined.WifiOff, contentDescription = null,
-                modifier = Modifier.size(48.dp),
+    Box(modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Outlined.WifiOff, null, modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Search failed", style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground)
             Text(message, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary)) {
-                Text("Retry")
-            }
+                containerColor = MaterialTheme.colorScheme.primary)) { Text("Retry") }
         }
     }
 }
@@ -238,32 +203,23 @@ private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier =
 @Composable
 private fun ResultStats(count: Long, instanceUrl: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment     = Alignment.CenterVertically,
     ) {
-        val countText = if (count > 0) "~${formatCount(count)} results" else "Results"
-        Text(countText, style = MaterialTheme.typography.labelSmall,
+        Text(if (count > 0) "~${formatCount(count)} results" else "Results",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(
-            shape = MaterialTheme.shapes.extraSmall,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        Surface(shape = MaterialTheme.shapes.extraSmall,
+            color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment     = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Outlined.Shield, contentDescription = null,
-                    modifier = Modifier.size(10.dp),
+                verticalAlignment     = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Shield, null, modifier = Modifier.size(10.dp),
                     tint = MaterialTheme.colorScheme.secondary)
-                Text(
-                    instanceUrl.removePrefix("https://").removePrefix("http://").take(24),
+                Text(instanceUrl.removePrefix("https://").removePrefix("http://").take(24),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -271,17 +227,27 @@ private fun ResultStats(count: Long, instanceUrl: String) {
 
 @Composable
 private fun AnswerBox(answer: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape    = MaterialTheme.shapes.medium,
-        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-    ) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Outlined.Lightbulb, contentDescription = null,
+    Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        Row(modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Outlined.Lightbulb, null,
                 tint = MaterialTheme.colorScheme.onSecondaryContainer)
             Text(answer, style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
+    }
+}
+
+@Composable
+private fun LoadMoreButton(onClick: () -> Unit) {
+    TextButton(
+        onClick  = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+    ) {
+        Text("Load more results", color = MaterialTheme.colorScheme.secondary,
+            fontWeight = FontWeight.Medium)
     }
 }
 
@@ -291,12 +257,11 @@ private fun SuggestionsBar(suggestions: List<String>, onSuggestion: (String) -> 
         Text("Related searches", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(suggestions.take(6)) { s ->
-                SuggestionChip(
-                    onClick = { onSuggestion(s) },
-                    label   = { Text(s, style = MaterialTheme.typography.labelSmall) },
-                )
+                SuggestionChip(onClick = { onSuggestion(s) },
+                    label = { Text(s, style = MaterialTheme.typography.labelSmall) })
             }
         }
     }
